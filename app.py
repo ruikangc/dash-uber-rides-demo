@@ -70,6 +70,9 @@ app.layout = html.Div([
                 placeholder="Please choose a month",
                 className="month-picker"
             ),
+            # LOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+            # NNNNNNGGG
+            # COMMENT
             html.Div([
                 html.Div([
                     html.H2("Dash - Uber Data App", style={'font-family': 'Dosis'}),
@@ -145,6 +148,11 @@ app.layout = html.Div([
     ], className="graphSlider ten columns offset-by-one"),
 ], style={"padding-top": "20px"})
 
+
+for x in app.layout.children:
+    print(x, "\n")
+
+app.layout.children.append(dcc.Graph('map-graph'))
 
 @cache.memoize(timeout=timeout)
 def getValue(value):
@@ -224,9 +232,9 @@ def update_total_rides_selection(value, slider_value, selection):
     totalInSelction = 0
     for x in selection:
         totalInSelction += len(totalList[getIndex(value)]
-                                        [slider_value-1]
+                                        [slider_value-1].compute()
                                         [totalList[getIndex(value)]
-                                                [slider_value-1].index.hour == int(x)])
+                                                [slider_value-1].index.hour.compute() == int(x)])
     return ("Total rides in selection: {:,d}"
             .format(totalInSelction))
 
@@ -413,19 +421,19 @@ def update_graph(value, slider_value, selectedData, prevLayout, mapControls):
         lonInitial = float(prevLayout['mapbox']['center']['lon'])
         bearing = float(prevLayout['mapbox']['bearing'])
     print(listStr)
-    print("List string print", eval(listStr).compute())
-    latVal = eval(listStr).compute()['Lat']
-    lonVal= eval(listStr).compute()['Lon']
+    print("List string print", eval(listStr))
+    latVal = eval(listStr)['Lat']
+    lonVal= eval(listStr)['Lon']
     return go.Figure(
         data=Data([
             Scattermapbox(
-                lat=eval(listStr).compute()['Lat'],
-                lon=eval(listStr).compute()['Lon'],
+                lat=eval(listStr)['Lat'],
+                lon=eval(listStr)['Lon'],
                 mode='markers',
                 hoverinfo="lat+lon+text",
-                text=eval(listStr).index.hour.compute(),
+                text=eval(listStr).index.hour,
                 marker=Marker(
-                    color=np.append(np.insert(eval(listStr).index.hour.compute(), 0, 0), 23),
+                    color=np.append(np.insert(eval(listStr).index.hour, 0, 0), 23),
                     colorscale=[[0, "#F4EC15"], [0.04167, "#DAF017"],
                                 [0.0833, "#BBEC19"], [0.125, "9DE81B"],
                                 [0.1667, "#80E41D"], [0.2083, "#66E01F"],
