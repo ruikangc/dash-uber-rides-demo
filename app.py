@@ -8,6 +8,7 @@ from plotly.graph_objs import *
 from flask import Flask
 import pandas as pd
 import numpy as np
+import dask.dataframe as dd
 import os
 from flask_caching import Cache
 
@@ -44,9 +45,9 @@ def initialize():
     for month in df.groupby(df.index.month):
         dailyList = []
         for day in month[1].groupby(month[1].index.day):
-            dailyList.append(day[1])
+            dailyList.append(dd.from_pandas(day[1], chunksize=500000))
         totalList.append(dailyList)
-    return np.array(totalList)
+    return totalList
 
 
 app.layout = html.Div([
@@ -293,8 +294,8 @@ def get_selection(value, slider_value, selection):
         if i in xSelected and len(xSelected) < 24:
             colorVal[i] = ('#FFFFFF')
         xVal.append(i)
-        yVal.append(len(totalList[getIndex(value)][slider_value-1]
-                    [totalList[getIndex(value)][slider_value-1].index.hour == i]))
+        yVal.append(len(totalList[getIndex(value)][slider_value-1].compute()
+                    [totalList[getIndex(value)][slider_value-1].index.hour.compute() == i]))
 
     return [np.array(xVal), np.array(yVal), np.array(xSelected),
             np.array(colorVal)]
@@ -374,19 +375,19 @@ def update_histogram(value, slider_value, selection):
 
 @cache.memoize(timeout=timeout)
 def get_lat_lon_color(selectedData, value, slider_value):
-    listStr = "totalList[getIndex(value)][slider_value-1]"
+    listStr = "totalList[getIndex(value)][slider_value-1].compute()"
     if(selectedData is None or len(selectedData) is 0):
         return listStr
     elif(int(selectedData[len(selectedData)-1])-int(selectedData[0])+2 == len(selectedData)+1 and len(selectedData) > 2):
-        listStr += "[(totalList[getIndex(value)][slider_value-1].index.hour>"+str(int(selectedData[0]))+") & \
-                    (totalList[getIndex(value)][slider_value-1].index.hour<" + str(int(selectedData[len(selectedData)-1]))+")]"
+        listStr += "[(totalList[getIndex(value)][slider_value-1].index.hour.compute()>"+str(int(selectedData[0]))+") & \
+                    (totalList[getIndex(value)][slider_value-1].index.hour.compute()<" + str(int(selectedData[len(selectedData)-1]))+")]"
     else:
         listStr += "["
         for point in selectedData:
             if (selectedData.index(point) is not len(selectedData)-1):
-                listStr += "(totalList[getIndex(value)][slider_value-1].index.hour==" + str(int(point)) + ") | "
+                listStr += "(totalList[getIndex(value)][slider_value-1].index.hour.compute()==" + str(int(point)) + ") | "
             else:
-                listStr += "(totalList[getIndex(value)][slider_value-1].index.hour==" + str(int(point)) + ")]"
+                listStr += "(totalList[getIndex(value)][slider_value-1].index.hour.compute()==" + str(int(point)) + ")]"
 
     return listStr
 
@@ -411,16 +412,20 @@ def update_graph(value, slider_value, selectedData, prevLayout, mapControls):
         latInitial = float(prevLayout['mapbox']['center']['lat'])
         lonInitial = float(prevLayout['mapbox']['center']['lon'])
         bearing = float(prevLayout['mapbox']['bearing'])
+    print(listStr)
+    print("List string print", eval(listStr).compute())
+    latVal = eval(listStr).compute()['Lat']
+    lonVal= eval(listStr).compute()['Lon']
     return go.Figure(
         data=Data([
             Scattermapbox(
-                lat=eval(listStr)['Lat'],
-                lon=eval(listStr)['Lon'],
+                lat=eval(listStr).compute()['Lat'],
+                lon=eval(listStr).compute()['Lon'],
                 mode='markers',
                 hoverinfo="lat+lon+text",
-                text=eval(listStr).index.hour,
+                text=eval(listStr).index.hour.compute(),
                 marker=Marker(
-                    color=np.append(np.insert(eval(listStr).index.hour, 0, 0), 23),
+                    color=np.append(np.insert(eval(listStr).index.hour.compute(), 0, 0), 23),
                     colorscale=[[0, "#F4EC15"], [0.04167, "#DAF017"],
                                 [0.0833, "#BBEC19"], [0.125, "9DE81B"],
                                 [0.1667, "#80E41D"], [0.2083, "#66E01F"],
