@@ -27,7 +27,7 @@ cache = Cache(app.server, config={
                 'CACHE_TYPE': 'redis',
                 'REDIS_URL': os.environ.get('REDIS_URL', '')
                 })
-timeout = 60 * 60  # 1 hour
+timeout = 0 # 1 hour
 
 
 mapbox_access_token = 'pk.eyJ1IjoiYWxpc2hvYmVpcmkiLCJhIjoiY2ozYnM3YTUxMDAxeDMzcGNjbmZyMmplZiJ9.ZjmQ0C2MNs1AzEBC_Syadg'
@@ -70,9 +70,6 @@ app.layout = html.Div([
                 placeholder="Please choose a month",
                 className="month-picker"
             ),
-            # LOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-            # NNNNNNGGG
-            # COMMENT
             html.Div([
                 html.Div([
                     html.H2("Dash - Uber Data App", style={'font-family': 'Dosis'}),
@@ -148,11 +145,6 @@ app.layout = html.Div([
     ], className="graphSlider ten columns offset-by-one"),
 ], style={"padding-top": "20px"})
 
-
-for x in app.layout.children:
-    print(x, "\n")
-
-app.layout.children.append(dcc.Graph('map-graph'))
 
 @cache.memoize(timeout=timeout)
 def getValue(value):
