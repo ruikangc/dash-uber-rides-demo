@@ -24,10 +24,10 @@ if 'DYNO' in os.environ:
 
 
 cache = Cache(app.server, config={
-                'CACHE_TYPE': 'redis',
+                'CACHE_TYPE': 'dummycache',
                 'REDIS_URL': os.environ.get('REDIS_URL', '')
                 })
-timeout = 0 # 1 hour
+timeout = 60 * 60 # 1 hour
 
 
 mapbox_access_token = 'pk.eyJ1IjoiYWxpc2hvYmVpcmkiLCJhIjoiY2ozYnM3YTUxMDAxeDMzcGNjbmZyMmplZiJ9.ZjmQ0C2MNs1AzEBC_Syadg'
@@ -412,10 +412,6 @@ def update_graph(value, slider_value, selectedData, prevLayout, mapControls):
         latInitial = float(prevLayout['mapbox']['center']['lat'])
         lonInitial = float(prevLayout['mapbox']['center']['lon'])
         bearing = float(prevLayout['mapbox']['bearing'])
-    print(listStr)
-    print("List string print", eval(listStr))
-    latVal = eval(listStr)['Lat']
-    lonVal= eval(listStr)['Lon']
     return go.Figure(
         data=Data([
             Scattermapbox(
