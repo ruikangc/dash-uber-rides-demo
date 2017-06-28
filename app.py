@@ -9,6 +9,7 @@ from flask import Flask
 import pandas as pd
 import numpy as np
 import os
+from flask_caching import Cache
 
 server = Flask('my app')
 server.secret_key = os.environ.get('secret_key', 'secret')
@@ -21,11 +22,19 @@ if 'DYNO' in os.environ:
     })
 
 
+cache = Cache(app.server, config={
+                'CACHE_TYPE': 'redis',
+                'REDIS_URL': os.environ.get('REDIS_URL', '')
+                })
+timeout = 60 * 60  # 1 hour
+
+
 mapbox_access_token = 'pk.eyJ1IjoiYWxpc2hvYmVpcmkiLCJhIjoiY2ozYnM3YTUxMDAxeDMzcGNjbmZyMmplZiJ9.ZjmQ0C2MNs1AzEBC_Syadg'
 
 
+@cache.memoize(timeout=timeout)
 def initialize():
-    df = pd.read_csv('https://www.dropbox.com/s/vxe7623o7eqbe6n/output.csv?dl=1')
+    df = pd.read_csv('output.csv')
     df.drop("Unnamed: 0", 1, inplace=True)
     df["Date/Time"] = pd.to_datetime(df["Date/Time"], format="%Y-%m-%d %H:%M:%S")
     df.index = df["Date/Time"]
@@ -63,7 +72,7 @@ app.layout = html.Div([
             html.Div([
                 html.Div([
                     html.H2("Dash - Uber Data App", style={'font-family': 'Dosis'}),
-                    html.Img(src="https://cdn.rawgit.com/plotly/design-assets/master/logo/dash/images/dash-logo-by-plotly-stripe.png?token=ARkbw71c0vCS8Jnau4bHOoc9HRF_lZAtks5ZUrwDwA%3D%3D",
+                    html.Img(src="https://cdn.rawgit.com/plotly/design-assets/a8c0b6972563dfa3e8e7b5d7454d4909fa9db21b/logo/dash/images/dash-logo-by-plotly-stripe.png?token=ARkbwzp9Cq3SoAp8SBfsMVVfotVrJJUxks5ZW_jVwA%3D%3D",
                             style={
                                 'height': '100px',
                                 'float': 'right',
@@ -136,6 +145,7 @@ app.layout = html.Div([
 ], style={"padding-top": "20px"})
 
 
+@cache.memoize(timeout=timeout)
 def getValue(value):
     val = {
         'Apr': 30,
@@ -147,6 +157,8 @@ def getValue(value):
     }[value]
     return val
 
+
+@cache.memoize(timeout=timeout)
 def getIndex(value):
     if(value==None):
         return 0
@@ -160,12 +172,8 @@ def getIndex(value):
     }[value]
     return val
 
-def getClickIndex(value):
-    if(value==None):
-        return 0
-    return value['points'][0]['x']
 
-
+@cache.memoize(timeout=timeout)
 @app.callback(Output("my-slider", "marks"),
               [Input("my-dropdown", "value")])
 def update_slider_ticks(value):
@@ -178,12 +186,14 @@ def update_slider_ticks(value):
     return marks
 
 
+@cache.memoize(timeout=timeout)
 @app.callback(Output("my-slider", "max"),
               [Input("my-dropdown", "value")])
 def update_slider_max(value):
     return getValue(value)
 
 
+@cache.memoize(timeout=timeout)
 @app.callback(Output("bar-selector", "value"),
               [Input("histogram", "selectedData")])
 def update_bar_selector(value):
@@ -195,6 +205,7 @@ def update_bar_selector(value):
     return holder
 
 
+@cache.memoize(timeout=timeout)
 @app.callback(Output("total-rides", "children"),
               [Input("my-dropdown", "value"), Input('my-slider', 'value')])
 def update_total_rides(value, slider_value):
@@ -202,6 +213,7 @@ def update_total_rides(value, slider_value):
             .format(len(totalList[getIndex(value)][slider_value-1])))
 
 
+@cache.memoize(timeout=timeout)
 @app.callback(Output("total-rides-selection", "children"),
               [Input("my-dropdown", "value"), Input('my-slider', 'value'),
                Input('bar-selector', 'value')])
@@ -218,6 +230,7 @@ def update_total_rides_selection(value, slider_value, selection):
             .format(totalInSelction))
 
 
+@cache.memoize(timeout=timeout)
 @app.callback(Output("date-value", "children"),
               [Input("my-dropdown", "value"), Input('my-slider', 'value'),
                Input("bar-selector", "value")])
@@ -244,12 +257,15 @@ def update_date(value, slider_value, selection):
     return (value, " ", slider_value, " - showing hour(s): ", x)
 
 
+@cache.memoize(timeout=timeout)
 @app.callback(Output("histogram", "selectedData"),
               [Input("my-dropdown", "value")])
 def clear_selection(value):
     if(value is None or len(value) is 0):
         return None
 
+
+@cache.memoize(timeout=timeout)
 @app.callback(Output("popupAnnotation", "children"),
               [Input("bar-selector", "value")])
 def clear_selection(value):
@@ -259,6 +275,7 @@ def clear_selection(value):
         return ""
 
 
+@cache.memoize(timeout=timeout)
 def get_selection(value, slider_value, selection):
     xVal = []
     yVal = []
@@ -283,7 +300,7 @@ def get_selection(value, slider_value, selection):
             np.array(colorVal)]
 
 
-
+@cache.memoize(timeout=timeout)
 @app.callback(Output("histogram", "figure"),
               [Input("my-dropdown", "value"), Input('my-slider', 'value'),
                Input("bar-selector", "value")])
@@ -355,6 +372,7 @@ def update_histogram(value, slider_value, selection):
             ]), layout=layout)
 
 
+@cache.memoize(timeout=timeout)
 def get_lat_lon_color(selectedData, value, slider_value):
     listStr = "totalList[getIndex(value)][slider_value-1]"
     if(selectedData is None or len(selectedData) is 0):
@@ -373,6 +391,7 @@ def get_lat_lon_color(selectedData, value, slider_value):
     return listStr
 
 
+@cache.memoize(timeout=timeout)
 @app.callback(Output("map-graph", "figure"),
               [Input("my-dropdown", "value"), Input('my-slider', 'value'),
               Input("bar-selector", "value")],
@@ -595,7 +614,7 @@ def update_graph(value, slider_value, selectedData, prevLayout, mapControls):
 external_css = ["https://cdnjs.cloudflare.com/ajax/libs/skeleton/2.0.4/skeleton.min.css",
                 "//fonts.googleapis.com/css?family=Raleway:400,300,600",
                 "//fonts.googleapis.com/css?family=Dosis:Medium",
-                "https://cdn.rawgit.com/plotly/dash-app-stylesheets/master/dash-uber-ride-demo.css",
+                "https://cdn.rawgit.com/plotly/dash-app-stylesheets/62f0eb4f1fadbefea64b2404493079bf848974e8/dash-uber-ride-demo.css",
                 "https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css"]
 
 
