@@ -9,6 +9,7 @@ from flask import Flask
 import pandas as pd
 import numpy as np
 import dask.dataframe as dd
+import dask.array as da
 import os
 from flask_caching import Cache
 
@@ -23,19 +24,20 @@ if 'DYNO' in os.environ:
     })
 
 
-cache = Cache(app.server, config={
-                'CACHE_TYPE': 'dummycache',
-                'REDIS_URL': os.environ.get('REDIS_URL', '')
-                })
-timeout = 60 * 60 # 1 hour
+# cache = Cache(
+#         app.server,
+#         config={
+#             'CACHE_TYPE': 'redis',
+#             'REDIS_URL': os.environ.get('REDIS_URL', '')
+#             }
+#         )
 
 
 mapbox_access_token = 'pk.eyJ1IjoiYWxpc2hvYmVpcmkiLCJhIjoiY2ozYnM3YTUxMDAxeDMzcGNjbmZyMmplZiJ9.ZjmQ0C2MNs1AzEBC_Syadg'
 
 
-@cache.memoize(timeout=timeout)
 def initialize():
-    df = pd.read_csv('https://www.dropbox.com/s/vxe7623o7eqbe6n/output.csv?dl=1')
+    df = pd.read_csv('output.csv')
     df.drop("Unnamed: 0", 1, inplace=True)
     df["Date/Time"] = pd.to_datetime(df["Date/Time"], format="%Y-%m-%d %H:%M:%S")
     df.index = df["Date/Time"]
@@ -45,9 +47,9 @@ def initialize():
     for month in df.groupby(df.index.month):
         dailyList = []
         for day in month[1].groupby(month[1].index.day):
-            dailyList.append(dd.from_pandas(day[1], chunksize=500000))
+            dailyList.append(day[1])
         totalList.append(dailyList)
-    return totalList
+    return da.from_array(np.array(totalList), chunks=(1))
 
 
 app.layout = html.Div([
@@ -146,7 +148,7 @@ app.layout = html.Div([
 ], style={"padding-top": "20px"})
 
 
-@cache.memoize(timeout=timeout)
+
 def getValue(value):
     val = {
         'Apr': 30,
@@ -159,7 +161,7 @@ def getValue(value):
     return val
 
 
-@cache.memoize(timeout=timeout)
+
 def getIndex(value):
     if(value==None):
         return 0
@@ -174,7 +176,8 @@ def getIndex(value):
     return val
 
 
-@cache.memoize(timeout=timeout)
+
+
 @app.callback(Output("my-slider", "marks"),
               [Input("my-dropdown", "value")])
 def update_slider_ticks(value):
@@ -187,14 +190,14 @@ def update_slider_ticks(value):
     return marks
 
 
-@cache.memoize(timeout=timeout)
+
 @app.callback(Output("my-slider", "max"),
               [Input("my-dropdown", "value")])
 def update_slider_max(value):
     return getValue(value)
 
 
-@cache.memoize(timeout=timeout)
+
 @app.callback(Output("bar-selector", "value"),
               [Input("histogram", "selectedData")])
 def update_bar_selector(value):
@@ -206,15 +209,14 @@ def update_bar_selector(value):
     return holder
 
 
-@cache.memoize(timeout=timeout)
 @app.callback(Output("total-rides", "children"),
               [Input("my-dropdown", "value"), Input('my-slider', 'value')])
 def update_total_rides(value, slider_value):
     return ("Total # of rides: {:,d}"
-            .format(len(totalList[getIndex(value)][slider_value-1])))
+            .format(len(totalList.compute()[getIndex(value)][slider_value-1])))
 
 
-@cache.memoize(timeout=timeout)
+
 @app.callback(Output("total-rides-selection", "children"),
               [Input("my-dropdown", "value"), Input('my-slider', 'value'),
                Input('bar-selector', 'value')])
@@ -223,15 +225,16 @@ def update_total_rides_selection(value, slider_value, selection):
         return ""
     totalInSelction = 0
     for x in selection:
-        totalInSelction += len(totalList[getIndex(value)]
-                                        [slider_value-1].compute()
-                                        [totalList[getIndex(value)]
-                                                [slider_value-1].index.hour.compute() == int(x)])
+        totalInSelction += len(totalList.compute()
+                               [getIndex(value)]
+                               [slider_value-1]
+                               [totalList.compute()[getIndex(value)]
+                               [slider_value-1].index.hour == int(x)])
     return ("Total rides in selection: {:,d}"
             .format(totalInSelction))
 
 
-@cache.memoize(timeout=timeout)
+
 @app.callback(Output("date-value", "children"),
               [Input("my-dropdown", "value"), Input('my-slider', 'value'),
                Input("bar-selector", "value")])
@@ -258,7 +261,7 @@ def update_date(value, slider_value, selection):
     return (value, " ", slider_value, " - showing hour(s): ", x)
 
 
-@cache.memoize(timeout=timeout)
+
 @app.callback(Output("histogram", "selectedData"),
               [Input("my-dropdown", "value")])
 def clear_selection(value):
@@ -266,7 +269,7 @@ def clear_selection(value):
         return None
 
 
-@cache.memoize(timeout=timeout)
+
 @app.callback(Output("popupAnnotation", "children"),
               [Input("bar-selector", "value")])
 def clear_selection(value):
@@ -276,7 +279,7 @@ def clear_selection(value):
         return ""
 
 
-@cache.memoize(timeout=timeout)
+
 def get_selection(value, slider_value, selection):
     xVal = []
     yVal = []
@@ -294,14 +297,14 @@ def get_selection(value, slider_value, selection):
         if i in xSelected and len(xSelected) < 24:
             colorVal[i] = ('#FFFFFF')
         xVal.append(i)
-        yVal.append(len(totalList[getIndex(value)][slider_value-1].compute()
-                    [totalList[getIndex(value)][slider_value-1].index.hour.compute() == i]))
+        yVal.append(len(totalList.compute()[getIndex(value)][slider_value-1]
+                    [totalList.compute()[getIndex(value)][slider_value-1].index.hour == i]))
 
     return [np.array(xVal), np.array(yVal), np.array(xSelected),
             np.array(colorVal)]
 
 
-@cache.memoize(timeout=timeout)
+
 @app.callback(Output("histogram", "figure"),
               [Input("my-dropdown", "value"), Input('my-slider', 'value'),
                Input("bar-selector", "value")])
@@ -373,26 +376,26 @@ def update_histogram(value, slider_value, selection):
             ]), layout=layout)
 
 
-@cache.memoize(timeout=timeout)
+
 def get_lat_lon_color(selectedData, value, slider_value):
-    listStr = "totalList[getIndex(value)][slider_value-1].compute()"
+    listStr = "totalList.compute()[getIndex(value)][slider_value-1]"
     if(selectedData is None or len(selectedData) is 0):
         return listStr
     elif(int(selectedData[len(selectedData)-1])-int(selectedData[0])+2 == len(selectedData)+1 and len(selectedData) > 2):
-        listStr += "[(totalList[getIndex(value)][slider_value-1].index.hour.compute()>"+str(int(selectedData[0]))+") & \
-                    (totalList[getIndex(value)][slider_value-1].index.hour.compute()<" + str(int(selectedData[len(selectedData)-1]))+")]"
+        listStr += "[(totalList.compute()[getIndex(value)][slider_value-1].index.hour>"+str(int(selectedData[0]))+") & \
+                    (totalList.compute()[getIndex(value)][slider_value-1].index.hour<" + str(int(selectedData[len(selectedData)-1]))+")]"
     else:
         listStr += "["
         for point in selectedData:
             if (selectedData.index(point) is not len(selectedData)-1):
-                listStr += "(totalList[getIndex(value)][slider_value-1].index.hour.compute()==" + str(int(point)) + ") | "
+                listStr += "(totalList.compute()[getIndex(value)][slider_value-1].index.hour==" + str(int(point)) + ") | "
             else:
-                listStr += "(totalList[getIndex(value)][slider_value-1].index.hour.compute()==" + str(int(point)) + ")]"
+                listStr += "(totalList.compute()[getIndex(value)][slider_value-1].index.hour==" + str(int(point)) + ")]"
 
     return listStr
 
 
-@cache.memoize(timeout=timeout)
+
 @app.callback(Output("map-graph", "figure"),
               [Input("my-dropdown", "value"), Input('my-slider', 'value'),
               Input("bar-selector", "value")],
@@ -623,6 +626,7 @@ for css in external_css:
     app.css.append_css({"external_url": css})
 
 
+
 @app.server.before_first_request
 def defineTotalList():
     global totalList
@@ -630,4 +634,4 @@ def defineTotalList():
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server()
