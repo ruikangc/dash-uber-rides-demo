@@ -9,7 +9,6 @@ from flask import Flask
 import pandas as pd
 import numpy as np
 import dask.dataframe as dd
-import dask.array as da
 import os
 from flask_caching import Cache
 
@@ -24,13 +23,12 @@ if 'DYNO' in os.environ:
     })
 
 
-# cache = Cache(
-#         app.server,
-#         config={
-#             'CACHE_TYPE': 'redis',
-#             'REDIS_URL': os.environ.get('REDIS_URL', '')
-#             }
-#         )
+cache = Cache(app.server, config={
+                'CACHE_TYPE': 'redis',
+                'REDIS_URL': os.environ.get('REDIS_URL', '')
+                }
+
+            )
 
 
 mapbox_access_token = 'pk.eyJ1IjoiYWxpc2hvYmVpcmkiLCJhIjoiY2ozYnM3YTUxMDAxeDMzcGNjbmZyMmplZiJ9.ZjmQ0C2MNs1AzEBC_Syadg'
@@ -49,7 +47,7 @@ def initialize():
         for day in month[1].groupby(month[1].index.day):
             dailyList.append(day[1])
         totalList.append(dailyList)
-    return da.from_array(np.array(totalList), chunks=(1))
+    return dd.from_array(np.array(totalList))
 
 
 app.layout = html.Div([
@@ -177,7 +175,6 @@ def getIndex(value):
 
 
 
-
 @app.callback(Output("my-slider", "marks"),
               [Input("my-dropdown", "value")])
 def update_slider_ticks(value):
@@ -209,6 +206,7 @@ def update_bar_selector(value):
     return holder
 
 
+
 @app.callback(Output("total-rides", "children"),
               [Input("my-dropdown", "value"), Input('my-slider', 'value')])
 def update_total_rides(value, slider_value):
@@ -225,11 +223,10 @@ def update_total_rides_selection(value, slider_value, selection):
         return ""
     totalInSelction = 0
     for x in selection:
-        totalInSelction += len(totalList.compute()
-                               [getIndex(value)]
-                               [slider_value-1]
-                               [totalList.compute()[getIndex(value)]
-                               [slider_value-1].index.hour == int(x)])
+        totalInSelction += len(totalList.compute()[getIndex(value)]
+                                        [slider_value-1]
+                                        [totalList.compute()[getIndex(value)]
+                                                [slider_value-1].index.hour == int(x)])
     return ("Total rides in selection: {:,d}"
             .format(totalInSelction))
 
@@ -624,7 +621,6 @@ external_css = ["https://cdnjs.cloudflare.com/ajax/libs/skeleton/2.0.4/skeleton.
 
 for css in external_css:
     app.css.append_css({"external_url": css})
-
 
 
 @app.server.before_first_request
